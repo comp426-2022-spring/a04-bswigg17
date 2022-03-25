@@ -1,6 +1,8 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const express = require('express');
+const fs = require('fs'); 
+const morgan = require('morgan'); 
 const app = express();
 const Database = require('better-sqlite3'); 
 const args = require('minimist')(process.argv.slice(2));
@@ -19,6 +21,8 @@ if (args['help']) {
 }
 
 const port = args['port'] || 5000;
+const debug = args['debug'] || false; 
+const log = args['log'] || false; 
 
 const db = new Database('log.db'); 
 const stmt = db.prepare("SELECT name FROM sqlite_master WHERE type='table' and name='accesslog'"); 
@@ -32,6 +36,14 @@ if (row === undefined) {
         `
 
     db.exec(sql); 
+}
+
+if (log) {
+    
+    const WRITESTREAM = fs.createWriteStream('access.log', { flags: 'a' })
+    app.use(morgan('combined', { stream: WRITESTREAM }))
+    
+
 }
 
 app.use((req, res, next) => {
@@ -66,6 +78,27 @@ app.get("/app/flip/call/:call/", (req, res) => {
         res.status(400).contentType('json').send('Bad Request'); 
     }
 });
+
+if (debug) {
+
+    app.get("/app/log/access", (req, res) => {
+
+        try {
+            const stmt = db.prepare("SELECT * FROM accesslog");
+            const data = stmt.all(); 
+            res.status(200).json(data);
+
+        }  
+        catch {
+            console.log(e);
+        }
+    });
+
+    app.get("/app/error", (req, res) => {
+        res.status(500);
+        res.render('error', {error: 'Error test successful'}); 
+    });
+};
 
 app.use((req, res) => {
     res.status(404).contentType('json').send('404 Not found'); 
